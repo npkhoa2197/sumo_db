@@ -239,10 +239,14 @@ find_by(DocName,
 find_by(_DocName, _Conditions, _SortFields, _Limit, _Offset, State) ->
   {error, not_supported, State}.
 
--spec create_schema(
-  sumo:schema(), state()
-) -> sumo_store:result(state()).
-create_schema(_Schema, State) ->
+-spec create_schema(sumo:schema(), state()) ->
+  sumo_store:result(state()).
+create_schema(Schema, #state{conn = Conn} = State) ->
+  Name = sumo_internal:schema_name(Schema),
+  NameBin = atom_to_binary(Name, utf8),
+  BucketType = <<NameBin/binary, "_maps">>,
+  BucketProps = [{datatype, maps}],
+  riakc_pb_socket:set_bucket_type(Conn, BucketType, BucketProps),
   {ok, State}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
