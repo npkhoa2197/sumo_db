@@ -31,7 +31,8 @@
 -export([
   create_schema/0,
   create_schema/1,
-  create_schema/2]).
+  create_schema/2,
+  delete_schema/1]).
 
 %%% API for standard CRUD functions.
 -export([
@@ -123,8 +124,11 @@ find(DocName, Id) ->
 -spec find_all(schema_name()) -> [user_doc()].
 find_all(DocName) ->
   case sumo_store:find_all(sumo_internal:get_store(DocName), DocName) of
-    {ok, Docs} -> docs_wakeup(DocName, Docs);
-    Error      -> throw(Error)
+    {ok, Docs} -> 
+    docs_wakeup(DocName, Docs);
+    Error      -> 
+        lager:error("find_all fail: ~p~n",[Error]),
+      throw(Error)
   end.
 
 %% @doc Returns Limit docs from the given store, starting at offset.
@@ -138,8 +142,11 @@ find_all(DocName, SortFields0, Limit, Offset) ->
   SortFields = normalize_sort_fields(SortFields0),
   Store = sumo_internal:get_store(DocName),
   case sumo_store:find_all(Store, DocName, SortFields, Limit, Offset) of
-    {ok, Docs} -> docs_wakeup(DocName, Docs);
-    Error      -> throw(Error)
+    {ok, Docs} -> 
+    docs_wakeup(DocName, Docs);
+    Error      -> 
+        lager:error("find_all fail: ~p~n",[Error]),
+      throw(Error)
   end.
 
 %% @doc Returns *all* docs that match Conditions.
@@ -187,6 +194,7 @@ find_by(DocName, Conditions, SortFields, Limit, Offset) ->
     {ok, Docs} -> docs_wakeup(DocName, Docs);
     Error      -> throw(Error)
   end.
+
 
 %% @doc Creates or updates the given Doc.
 -spec persist(schema_name(), UserDoc) -> UserDoc.
@@ -259,6 +267,16 @@ create_schema(DocName, Store) ->
   case sumo_store:create_schema(Store, sumo_internal:get_schema(DocName)) of
     ok ->
       sumo_event:dispatch(DocName, schema_created),
+      ok;
+    Error ->
+      throw(Error)
+  end.
+
+-spec delete_schema(schema_name()) -> ok.
+delete_schema(DocName) ->
+  case sumo_store:delete_schema(sumo_internal:get_store(DocName)) of
+    ok ->
+      sumo_event:dispatch(DocName, schema_deleted),
       ok;
     Error ->
       throw(Error)

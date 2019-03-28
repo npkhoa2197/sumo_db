@@ -27,6 +27,7 @@
 -export([
   start_link/3,
   create_schema/2,
+  delete_schema/1,
   persist/2,
   delete_by/3,
   delete_all/2,
@@ -117,6 +118,8 @@
 
 -callback create_schema(sumo:schema(), State) -> result(State).
 
+-callback delete_schema(State) -> result(State).
+
 %%%=============================================================================
 %%% API
 %%%=============================================================================
@@ -138,6 +141,11 @@ start_link(Name, Module, Options) ->
 -spec create_schema(atom(), sumo:schema()) -> ok | {error, term()}.
 create_schema(Name, Schema) ->
   wpool:call(Name, {create_schema, Schema}).
+
+-spec delete_schema(atom()) -> ok | {error, term()}.
+delete_schema(Name) ->
+  wpool:call(Name, {delete_schema}).
+
 
 %% @doc Persist the given doc with the given store name.
 -spec persist(Name, Doc) -> Res when
@@ -243,6 +251,7 @@ call(Name, DocName, Function, Args) ->
     wpool:default_strategy(),
     Timeout).
 
+
 %%%=============================================================================
 %%% gen_server callbacks
 %%%=============================================================================
@@ -261,6 +270,7 @@ handle_call(
   {persist, Doc}, _From,
   #state{handler = Handler, handler_state = HState} = State
 ) ->
+
   {OkOrError, Reply, NewState} = Handler:persist(Doc, HState),
   {reply, {OkOrError, Reply}, State#state{handler_state=NewState}};
 
@@ -326,6 +336,16 @@ handle_call(
   RealArgs = lists:append(Args, [DocName, HState]),
   {OkOrError, Reply, NewState} = erlang:apply(Handler, Function, RealArgs),
   {reply, {OkOrError, Reply}, State#state{handler_state=NewState}};
+
+handle_call(
+  {delete_schema}, _From,
+  #state{handler = Handler, handler_state = HState} = State
+) ->
+  {Result, NewState} = case Handler:delete_schema(HState) of
+    {ok, NewState_} -> {ok, NewState_};
+    {error, Error, NewState_} -> {{error, Error}, NewState_}
+  end,
+  {reply, Result, State#state{handler_state=NewState}};
 
 handle_call(
   {create_schema, Schema}, _From,
