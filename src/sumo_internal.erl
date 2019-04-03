@@ -36,6 +36,7 @@
   id_field_type/1,
   field_name/1,
   field_type/1,
+  field_type/2,
   field_attrs/1
 ]).
 
@@ -150,6 +151,15 @@ id_field_name(DocName) ->
 -spec id_field_type(sumo:schema_name()) -> sumo:field_type().
 id_field_type(DocName) ->
   field_type(get_id_field(get_schema(DocName))).
+
+-spec field_type(sumo:schema_name(), sumo:field_name()) -> sumo:field_type().
+field_type(DocName, FieldName) ->
+   Schema = sumo_internal:get_schema(DocName),
+   Fields = maps:get(fields, Schema),
+   case lists:filter(fun(#{name := Name}) -> Name =:=  FieldName  end, Fields) of
+       [Field] -> field_type(Field);
+       _ -> notfound
+    end.
 
 %% @doc Returns field marked as ID for the given schema or doc name.
 get_id_field(_Schema = #{fields := Fields}) ->
