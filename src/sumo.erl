@@ -40,6 +40,7 @@
   delete/2,
   delete_by/2,
   delete_all/1,
+  async_delete_by/2,
   find/2,
   find_all/1, find_all/4,
   find_by/2, find_by/4, find_by/5,
@@ -242,6 +243,19 @@ delete(DocName, Id) ->
 %% @doc Deletes the doc identified by Conditions.
 -spec delete_by(schema_name(), conditions()) -> non_neg_integer().
 delete_by(DocName, Conditions) ->
+  Store = sumo_internal:get_store(DocName),
+  case sumo_store:delete_by(Store, DocName, Conditions) of
+    {ok, 0} ->
+      0;
+    {ok, NumRows} ->
+      sumo_event:dispatch(DocName, deleted_total, [NumRows]),
+      NumRows;
+    Error ->
+      throw(Error)
+  end.
+
+-spec async_delete_by(schema_name(), conditions()) -> non_neg_integer().
+async_delete_by(DocName, Conditions) ->
   Store = sumo_internal:get_store(DocName),
   case sumo_store:delete_by(Store, DocName, Conditions) of
     {ok, 0} ->
