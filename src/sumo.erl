@@ -51,7 +51,8 @@
 %%% Types
 -type schema_name() :: atom().
 -type field_attr()  :: id | unique | index | not_null | auto_increment |
-                       {length, integer()}.
+                       {length, integer()} | {sub_fields, map()}.
+
 -type field_attrs() :: [field_attr()].
 -type field_type()  :: integer | string | binary | text | float |
                        date | datetime | custom.
@@ -192,6 +193,7 @@ find_by(DocName, Conditions, SortFields, Limit, Offset) ->
   Store = sumo_internal:get_store(DocName),
   case sumo_store:find_by(
       Store, DocName, Conditions, NormalizedSortFields, Limit, Offset) of
+    {ok, {agg, AggMap}} -> AggMap;
     {ok, Docs} -> docs_wakeup(DocName, Docs);
     Error      -> throw(Error)
   end.
