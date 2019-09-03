@@ -37,6 +37,7 @@
 %%% API for standard CRUD functions.
 -export([
   persist/2,
+  async_persist/2,
   delete/2,
   delete_by/2,
   delete_all/1,
@@ -198,6 +199,12 @@ find_by(DocName, Conditions, SortFields, Limit, Offset) ->
     Error      -> throw(Error)
   end.
 
+-spec async_persist(schema_name(), user_doc()) -> ok | {error, term()}.
+async_persist(DocName, State) ->
+lager:debug("sumo async_persist DocName: ~p, State; ~p~n",[DocName, State]),
+  spawn(fun() ->
+  persist(DocName, State)
+end).
 
 %% @doc Creates or updates the given Doc.
 -spec persist(schema_name(), UserDoc) -> UserDoc.
