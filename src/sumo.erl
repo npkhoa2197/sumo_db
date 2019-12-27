@@ -23,74 +23,75 @@
 
 %%% API for doc/schema manipulation.
 -export([
-  new_schema/2,
-  new_field/3,
-  new_field/2]).
+				 new_schema/2,
+				 new_field/3,
+				 new_field/2]).
 
 %%% API for schema creation.
 -export([
-  create_schema/0,
-  create_schema/1,
-  create_schema/2,
-  delete_schema/1]).
+				 create_schema/0,
+				 create_schema/1,
+				 create_schema/2,
+				 delete_schema/1]).
 
 %%% API for standard CRUD functions.
 -export([
-  persist/2,
-  async_persist/2,
-  delete/2,
-  delete_by/2,
-  delete_all/1,
-  async_delete_by/2,
-  find/2,
-  find_all/1, find_all/4,
-  find_by/2, find_by/4, find_by/5,
-  find_one/2,
-  call/2, call/3
-]).
+				 persist/2,
+				 async_persist/2,
+				 delete/2,
+				 delete_by/2,
+				 delete_all/1,
+				 async_delete_by/2,
+				 find/2,
+				 find_all/1, find_all/4,
+				 find_by/2, find_by/4, find_by/5,
+				 find_count_by/5,
+				 find_one/2,
+				 call/2, call/3
+				]).
 
 %%% Types
 -type schema_name() :: atom().
 -type field_attr()  :: id | unique | index | not_null | auto_increment |
-                       {length, integer()} | {sub_fields, map()}.
+{length, integer()} | {sub_fields, map()}.
 
 -type field_attrs() :: [field_attr()].
 -type field_type()  :: integer | string | binary | text | float |
-                       date | datetime | custom.
+date | datetime | custom.
 -type field_name()  :: atom().
 -type field_value() :: term().
 -type operator()    :: '<' | '>' | '==' | '=<' | '>=' | '/=' | 'like'.
 -type doc()         :: #{field_name() => field_value()}.
 -type conditions()  :: condition() | [condition()].
 -type condition()   :: {'and', [condition()]} | {'or', [condition()]} |
-                       {'not', condition()} | {field_name(), field_value()} |
-                       {field_name(), operator(), field_value()} |
-                       {field_name(), operator(), field_name()}.
+{'not', condition()} | {field_name(), field_value()} |
+{field_name(), operator(), field_value()} |
+{field_name(), operator(), field_name()}.
 -type sort_order()  :: asc | desc.
 -type sort()        :: field_name() |
-                       {field_name(), sort_order()} |
-                       [{field_name(), sort_order()}].
+{field_name(), sort_order()} |
+[{field_name(), sort_order()}].
 -type schema()      :: sumo_internal:schema().
 -type field()       :: sumo_internal:field().
 -type user_doc()    :: term().
 
 -export_type([
-  schema_name/0,
-  field_attr/0,
-  field_attrs/0,
-  field_type/0,
-  field_name/0,
-  field_value/0,
-  doc/0,
-  conditions/0,
-  sort/0,
-  sort_order/0,
-  operator/0,
-  condition/0,
-  schema/0,
-  field/0,
-  user_doc/0
-]).
+							schema_name/0,
+							field_attr/0,
+							field_attrs/0,
+							field_type/0,
+							field_name/0,
+							field_value/0,
+							doc/0,
+							conditions/0,
+							sort/0,
+							sort_order/0,
+							operator/0,
+							condition/0,
+							schema/0,
+							field/0,
+							user_doc/0
+						 ]).
 
 %%%=============================================================================
 %%% Code starts here.
@@ -99,187 +100,209 @@
 %% @doc Returns all the configured docs.
 -spec get_docs() -> [{atom(), atom()}].
 get_docs() ->
-  {ok, Docs} = application:get_env(sumo_db, docs),
-  Docs.
+	{ok, Docs} = application:get_env(sumo_db, docs),
+	Docs.
 
 %% @doc Creates the schema for all known (configured) docs.
 -spec create_schema() -> ok.
 create_schema() ->
-  lists:foreach(fun({DocName, Store}) ->
-    create_schema(DocName, Store)
-  end, get_docs()).
+	lists:foreach(fun({DocName, Store}) ->
+										create_schema(DocName, Store)
+								end, get_docs()).
 
 %% @doc Returns 1 doc that matches the given Conditions.
 -spec find_one(schema_name(), conditions()) -> user_doc() | notfound.
 find_one(DocName, Conditions) ->
-  case find_by(DocName, Conditions, 1, 0) of
-    []   -> notfound;
-    List -> hd(List)
-  end.
+	case find_by(DocName, Conditions, 1, 0) of
+		[]   -> notfound;
+		List -> hd(List)
+	end.
 
 %% @doc Returns the doc identified by Id.
 -spec find(schema_name(), field_value()) -> user_doc() | notfound.
 find(DocName, Id) ->
-  IdFieldName = sumo_internal:id_field_name(DocName),
-  find_one(DocName, [{IdFieldName, Id}]).
+	IdFieldName = sumo_internal:id_field_name(DocName),
+	find_one(DocName, [{IdFieldName, Id}]).
 
 %% @doc Returns all docs from the given store.
 -spec find_all(schema_name()) -> [user_doc()].
 find_all(DocName) ->
-  case sumo_store:find_all(sumo_internal:get_store(DocName), DocName) of
-    {ok, Docs} -> 
-    docs_wakeup(DocName, Docs);
-    Error      -> 
-        lager:error("find_all fail: ~p~n",[Error]),
-      throw(Error)
-  end.
+	case sumo_store:find_all(sumo_internal:get_store(DocName), DocName) of
+		{ok, Docs} ->
+			docs_wakeup(DocName, Docs);
+		Error      ->
+			lager:error("find_all fail: ~p~n",[Error]),
+			throw(Error)
+	end.
 
 %% @doc Returns Limit docs from the given store, starting at offset.
 -spec find_all(DocName, SortFields0, Limit, Offset) -> Res when
-  DocName     :: schema_name(),
-  SortFields0 :: sort(),
-  Limit       :: non_neg_integer(),
-  Offset      :: non_neg_integer(),
-  Res         :: [user_doc()].
+		DocName     :: schema_name(),
+		SortFields0 :: sort(),
+		Limit       :: non_neg_integer(),
+		Offset      :: non_neg_integer(),
+		Res         :: [user_doc()].
 find_all(DocName, SortFields0, Limit, Offset) ->
-  SortFields = normalize_sort_fields(SortFields0),
-  Store = sumo_internal:get_store(DocName),
-  case sumo_store:find_all(Store, DocName, SortFields, Limit, Offset) of
-    {ok, Docs} -> 
-    docs_wakeup(DocName, Docs);
-    Error      -> 
-        lager:error("find_all fail: ~p~n",[Error]),
-      throw(Error)
-  end.
+	SortFields = normalize_sort_fields(SortFields0),
+	Store = sumo_internal:get_store(DocName),
+	case sumo_store:find_all(Store, DocName, SortFields, Limit, Offset) of
+		{ok, Docs} ->
+			docs_wakeup(DocName, Docs);
+		Error      ->
+			lager:error("find_all fail: ~p~n",[Error]),
+			throw(Error)
+	end.
 
 %% @doc Returns *all* docs that match Conditions.
 -spec find_by(schema_name(), conditions()) -> [user_doc()].
 find_by(DocName, Conditions) ->
-  Store = sumo_internal:get_store(DocName),
-  case sumo_store:find_by(Store, DocName, Conditions) of
-    {ok, Docs} -> docs_wakeup(DocName, Docs);
-    Error      -> throw(Error)
-  end.
+	Store = sumo_internal:get_store(DocName),
+	case sumo_store:find_by(Store, DocName, Conditions) of
+		{ok, Docs} -> docs_wakeup(DocName, Docs);
+		Error      ->
+			io:format("Findby Error ~p ~n", [Error]),
+			throw(Error)
+	end.
 
 %% @doc
 %% Returns Limit number of docs that match Conditions, starting at
 %% offset Offset.
 %% @end
 -spec find_by(DocName, Conditions, Limit, Offset) -> Res when
-  DocName    :: schema_name(),
-  Conditions :: conditions(),
-  Limit      :: non_neg_integer(),
-  Offset     :: non_neg_integer(),
-  Res        :: [user_doc()].
+		DocName    :: schema_name(),
+		Conditions :: conditions(),
+		Limit      :: non_neg_integer(),
+		Offset     :: non_neg_integer(),
+		Res        :: [user_doc()].
 find_by(DocName, Conditions, Limit, Offset) ->
-  Store = sumo_internal:get_store(DocName),
-  case sumo_store:find_by(Store, DocName, Conditions, Limit, Offset) of
-    {ok, Docs} -> docs_wakeup(DocName, Docs);
-    Error      -> throw(Error)
-  end.
+	Store = sumo_internal:get_store(DocName),
+	case sumo_store:find_by(Store, DocName, Conditions, Limit, Offset) of
+		{ok, Docs} -> docs_wakeup(DocName, Docs);
+		Error      -> throw(Error)
+	end.
 
 %% @doc
 %% Returns Limit number of docs that match Conditions, starting at
 %% offset Offset.
 %% @end
 -spec find_by(DocName, Conditions, SortFields, Limit, Offset) -> Res when
-  DocName    :: schema_name(),
-  Conditions :: conditions(),
-  SortFields :: sort(),
-  Limit      :: non_neg_integer(),
-  Offset     :: non_neg_integer(),
-  Res        :: [user_doc()].
+		DocName    :: schema_name(),
+		Conditions :: conditions(),
+		SortFields :: sort(),
+		Limit      :: non_neg_integer(),
+		Offset     :: non_neg_integer(),
+		Res        :: [user_doc()].
+
+
 find_by(DocName, Conditions, SortFields, Limit, Offset) ->
-  NormalizedSortFields = normalize_sort_fields(SortFields),
-  Store = sumo_internal:get_store(DocName),
-  case sumo_store:find_by(
-      Store, DocName, Conditions, NormalizedSortFields, Limit, Offset) of
-    {ok, {agg, AggMap}} -> AggMap;
-    {ok, Docs} -> docs_wakeup(DocName, Docs);
-    Error      -> throw(Error)
-  end.
+	NormalizedSortFields = normalize_sort_fields(SortFields),
+	Store = sumo_internal:get_store(DocName),
+	case sumo_store:find_by(
+				 Store, DocName, Conditions, NormalizedSortFields, Limit, Offset) of
+		{ok, {agg, AggMap}} -> AggMap;
+		{ok, Docs} -> docs_wakeup(DocName, Docs);
+		Error      -> throw(Error)
+	end.
+
+-spec find_count_by(DocName, Conditions, SortFields, Limit, Offset) -> Res when
+		DocName    :: schema_name(),
+		Conditions :: conditions(),
+		SortFields :: sort(),
+		Limit      :: non_neg_integer(),
+		Offset     :: non_neg_integer(),
+		Res        :: [user_doc()].
+
+find_count_by(DocName, Conditions, SortFields, Limit, Offset) ->
+	NormalizedSortFields = normalize_sort_fields(SortFields),
+	Store = sumo_internal:get_store(DocName),
+	case sumo_store:find_count_by(
+				 Store, DocName, Conditions, NormalizedSortFields, Limit, Offset) of
+		{ok, {agg, AggMap}} -> AggMap;
+		{ok, {Count, Docs}} -> {Count, docs_wakeup(DocName, Docs)};
+		Error      -> throw(Error)
+	end.
 
 -spec async_persist(schema_name(), user_doc()) -> ok | {error, term()}.
 async_persist(DocName, State) ->
-lager:debug("sumo async_persist DocName: ~p, State; ~p~n",[DocName, State]),
-  spawn(fun() ->
-  persist(DocName, State)
-end).
+	lager:debug("sumo async_persist DocName: ~p, State; ~p~n",[DocName, State]),
+	spawn(fun() ->
+						persist(DocName, State)
+				end).
 
 %% @doc Creates or updates the given Doc.
 -spec persist(schema_name(), UserDoc) -> UserDoc.
 persist(DocName, State) ->
-  IdField = sumo_internal:id_field_name(DocName),
-  DocMap = DocName:sumo_sleep(State),
-  EventName = case maps:get(IdField, DocMap, undefined) of
-    undefined -> created;
-    _         -> updated
-  end,
-  Store = sumo_internal:get_store(DocName),
-  case sumo_store:persist(Store, sumo_internal:new_doc(DocName, DocMap)) of
-    {ok, NewDoc} ->
-      Ret = sumo_internal:wakeup(DocName, NewDoc),
-      sumo_event:dispatch(DocName, EventName, [Ret]),
-      Ret;
-    Error ->
-      throw(Error)
-  end.
+	IdField = sumo_internal:id_field_name(DocName),
+	DocMap = DocName:sumo_sleep(State),
+	EventName = case maps:get(IdField, DocMap, undefined) of
+								undefined -> created;
+								_         -> updated
+							end,
+	Store = sumo_internal:get_store(DocName),
+	case sumo_store:persist(Store, sumo_internal:new_doc(DocName, DocMap)) of
+		{ok, NewDoc} ->
+			Ret = sumo_internal:wakeup(DocName, NewDoc),
+			sumo_event:dispatch(DocName, EventName, [Ret]),
+			Ret;
+		Error ->
+			throw(Error)
+	end.
 
 %% @doc Deletes all docs of type DocName.
 -spec delete_all(schema_name()) -> non_neg_integer().
 delete_all(DocName) ->
-  Store = sumo_internal:get_store(DocName),
-  case sumo_store:delete_all(Store, DocName) of
-    {ok, NumRows} ->
-      case NumRows > 0 of
-        true  -> sumo_event:dispatch(DocName, deleted_all);
-        _     -> ok
-      end,
-      NumRows;
-    Error ->
-      throw(Error)
-  end.
+	Store = sumo_internal:get_store(DocName),
+	case sumo_store:delete_all(Store, DocName) of
+		{ok, NumRows} ->
+			case NumRows > 0 of
+				true  -> sumo_event:dispatch(DocName, deleted_all);
+				_     -> ok
+			end,
+			NumRows;
+		Error ->
+			throw(Error)
+	end.
 
 %% @doc Deletes the doc identified by Id.
 -spec delete(schema_name(), user_doc()) -> boolean().
 delete(DocName, Id) ->
-  IdField = sumo_internal:id_field_name(DocName),
-  case delete_by(DocName, [{IdField, Id}]) of
-    1 -> sumo_event:dispatch(DocName, deleted, [Id]), true;
-    0 -> false
-  end.
+	IdField = sumo_internal:id_field_name(DocName),
+	case delete_by(DocName, [{IdField, Id}]) of
+		1 -> sumo_event:dispatch(DocName, deleted, [Id]), true;
+		0 -> false
+	end.
 
 %% @doc Deletes the doc identified by Conditions.
 -spec delete_by(schema_name(), conditions()) -> non_neg_integer().
 delete_by(DocName, Conditions) ->
-  Store = sumo_internal:get_store(DocName),
-  case sumo_store:delete_by(Store, DocName, Conditions) of
-    {ok, 0} ->
-      0;
-    {ok, NumRows} ->
-      sumo_event:dispatch(DocName, deleted_total, [NumRows]),
-      NumRows;
-    Error ->
-      throw(Error)
-  end.
+	Store = sumo_internal:get_store(DocName),
+	case sumo_store:delete_by(Store, DocName, Conditions) of
+		{ok, 0} ->
+			0;
+		{ok, NumRows} ->
+			sumo_event:dispatch(DocName, deleted_total, [NumRows]),
+			NumRows;
+		Error ->
+			throw(Error)
+	end.
 
 -spec async_delete_by(schema_name(), conditions()) -> non_neg_integer().
 async_delete_by(DocName, Conditions) ->
-  Store = sumo_internal:get_store(DocName),
-  case sumo_store:delete_by(Store, DocName, Conditions) of
-    {ok, 0} ->
-      0;
-    {ok, NumRows} ->
-      sumo_event:dispatch(DocName, deleted_total, [NumRows]),
-      NumRows;
-    Error ->
-      throw(Error)
-  end.
+	Store = sumo_internal:get_store(DocName),
+	case sumo_store:delete_by(Store, DocName, Conditions) of
+		{ok, 0} ->
+			0;
+		{ok, NumRows} ->
+			sumo_event:dispatch(DocName, deleted_total, [NumRows]),
+			NumRows;
+		Error ->
+			throw(Error)
+	end.
 
 %% @doc Creates the schema for the docs of type DocName.
 -spec create_schema(schema_name()) -> ok.
 create_schema(DocName) ->
-  create_schema(DocName, sumo_internal:get_store(DocName)).
+	create_schema(DocName, sumo_internal:get_store(DocName)).
 
 %% @doc
 %% Creates the schema for the docs of type DocName using the given
@@ -287,52 +310,52 @@ create_schema(DocName) ->
 %% @end
 -spec create_schema(schema_name(), atom()) -> ok.
 create_schema(DocName, Store) ->
-  case sumo_store:create_schema(Store, sumo_internal:get_schema(DocName)) of
-    ok ->
-      sumo_event:dispatch(DocName, schema_created),
-      ok;
-    Error ->
-      throw(Error)
-  end.
+	case sumo_store:create_schema(Store, sumo_internal:get_schema(DocName)) of
+		ok ->
+			sumo_event:dispatch(DocName, schema_created),
+			ok;
+		Error ->
+			throw(Error)
+	end.
 
 -spec delete_schema(schema_name()) -> ok.
 delete_schema(DocName) ->
-  case sumo_store:delete_schema(sumo_internal:get_store(DocName)) of
-    ok ->
-      sumo_event:dispatch(DocName, schema_deleted),
-      ok;
-    Error ->
-      throw(Error)
-  end.
+	case sumo_store:delete_schema(sumo_internal:get_store(DocName)) of
+		ok ->
+			sumo_event:dispatch(DocName, schema_deleted),
+			ok;
+		Error ->
+			throw(Error)
+	end.
 
 %% @doc Calls the given custom function of a store.
 -spec call(schema_name(), atom()) -> term().
 call(DocName, Function) ->
-  call(DocName, Function, []).
+	call(DocName, Function, []).
 
 %% @doc Calls the given custom function of a store with the given args.
 -spec call(schema_name(), atom(), [term()]) -> term().
 call(DocName, Function, Args) ->
-  Store = sumo_internal:get_store(DocName),
-  case sumo_store:call(Store, DocName, Function, Args) of
-    {ok, {docs, Docs}} -> docs_wakeup(DocName, Docs);
-    {ok, {raw, Value}} -> Value
-  end.
+	Store = sumo_internal:get_store(DocName),
+	case sumo_store:call(Store, DocName, Function, Args) of
+		{ok, {docs, Docs}} -> docs_wakeup(DocName, Docs);
+		{ok, {raw, Value}} -> Value
+	end.
 
 %% @doc Returns a new schema.
 -spec new_schema(schema_name(), [field()]) -> schema().
 new_schema(Name, Fields) ->
-  sumo_internal:new_schema(Name, Fields).
+	sumo_internal:new_schema(Name, Fields).
 
 %% @doc Returns a new field of the given type and attributes.
 -spec new_field(field_name(), field_type(), field_attrs()) -> field().
 new_field(Name, Type, Attributes) ->
-  sumo_internal:new_field(Name, Type, Attributes).
+	sumo_internal:new_field(Name, Type, Attributes).
 
 %% @doc Returns a new field of the given type without attributes.
 -spec new_field(field_name(), field_type()) -> field().
 new_field(Name, Type) ->
-  new_field(Name, Type, []).
+	new_field(Name, Type, []).
 
 %%%=============================================================================
 %%% Internal functions
@@ -340,14 +363,14 @@ new_field(Name, Type) ->
 
 %% @private
 docs_wakeup(DocName, Docs) ->
-  lists:map(fun(Doc) ->
-    sumo_internal:wakeup(DocName, Doc)
-  end, Docs).
+	lists:map(fun(Doc) ->
+								sumo_internal:wakeup(DocName, Doc)
+						end, Docs).
 
 %% @private
 normalize_sort_fields(FieldName) when is_atom(FieldName) ->
-  [{FieldName, asc}];
+	[{FieldName, asc}];
 normalize_sort_fields({Name, Order}) ->
-  [{Name, Order}];
+	[{Name, Order}];
 normalize_sort_fields(SortFields) when is_list(SortFields) ->
-  lists:flatmap(fun normalize_sort_fields/1, SortFields).
+	lists:flatmap(fun normalize_sort_fields/1, SortFields).

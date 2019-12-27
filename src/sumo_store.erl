@@ -36,6 +36,7 @@
   find_by/3,
   find_by/5,
   find_by/6,
+  find_count_by/6,
   call/4
 ]).
 
@@ -236,6 +237,17 @@ find_by(Name, DocName, Conditions, SortFields, Limit, Offset) ->
   wpool:call(Name, {find_by, DocName, Conditions, SortFields, Limit, Offset}).
 
 
+-spec find_count_by(Name, DocName, Conditions, SortFields, Limit, Offset) -> Res when
+  Name       :: atom(),
+  DocName    :: sumo:schema_name(),
+  Conditions :: sumo:conditions(),
+  SortFields :: sumo:sort(),
+  Limit      :: non_neg_integer(),
+  Offset     :: non_neg_integer(),
+  Res        :: {ok, [sumo_internal:doc()]} | {error, term()}.
+find_count_by(Name, DocName, Conditions, SortFields, Limit, Offset) ->
+  wpool:call(Name, {find_count_by, DocName, Conditions, SortFields, Limit, Offset}).
+
 %% @doc Calls a custom function in the given store name.
 -spec call(Name, DocName, Function, Args) -> Res when
   Name     :: atom(),
@@ -328,6 +340,16 @@ handle_call(
     DocName, Conditions, SortFields, Limit, Offset, HState
   ),
   {reply, {OkOrError, Reply}, State#state{handler_state=NewState}};
+
+handle_call(
+  {find_count_by, DocName, Conditions, SortFields, Limit, Offset}, _From,
+  #state{handler = Handler, handler_state = HState} = State
+) ->
+  {OkOrError, Reply, NewState} = Handler:find_count_by(
+    DocName, Conditions, SortFields, Limit, Offset, HState
+  ),
+  {reply, {OkOrError, Reply}, State#state{handler_state=NewState}};
+
 
 handle_call(
   {call, DocName, Function, Args}, _From,
