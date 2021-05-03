@@ -212,4 +212,4 @@ check_operator(Op) -> throw({unknown_operator, Op}).
 
 -spec report_overrun(term()) -> ok.
 report_overrun(Report) ->
-  lager:error("~p", [Report]).
+  lager:info("~p", [Report]).

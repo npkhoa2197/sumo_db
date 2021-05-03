@@ -127,7 +127,7 @@ start_link(Name, Module, Options) ->
   PoolSize = sumo_utils:keyfind(workers, Options, 100),
   WPoolConfigOpts = application:get_env(sumo_db, wpool_opts, []),
   WPoolOptions = [
-    {overrun_warning, 5000},
+    {overrun_warning, infinity},
     {overrun_handler, {sumo_internal, report_overrun}},
     {workers, PoolSize},
     {worker, {?MODULE, [Module, Options]}}
